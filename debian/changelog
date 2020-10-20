@@ -1,3 +1,9 @@
+nginx (1.10.3-1+deb9u5+moxa1); urgency=medium
+
+  * Fix monotonic time
+
+ -- Erik Ma <erikwc.ma@moxa.com>  Tue, 20 Oct 2020 13:55:00 +0800
+
 nginx (1.10.3-1+deb9u5) stretch-security; urgency=high
 
   * Non-maintainer upload by the LTS Security Team.

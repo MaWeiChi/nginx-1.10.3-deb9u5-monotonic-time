@@ -1,0 +1,94 @@
+From: Erik Ma <ErikWC.Ma@moxa.com>
+Date: Tue, 20 Oct 2020 13:55:00 +0800
+Subject: Monotonic Time.
+---
+Index: nginx-1.10.3/auto/unix
+===================================================================
+--- nginx-1.10.3.orig/auto/unix
++++ nginx-1.10.3/auto/unix
+@@ -184,6 +184,30 @@ ngx_feature_test="fcntl(0, F_READAHEAD,
+ . auto/feature
+ 
+ 
++ngx_feature="clock_gettime(CLOCK_MONOTONIC)"
++ngx_feature_name="NGX_HAVE_CLOCK_MONOTONIC"
++ngx_feature_run=no
++ngx_feature_incs="#include <time.h>"
++ngx_feature_path=
++ngx_feature_libs=
++ngx_feature_test="struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts)"
++. auto/feature
++
++
++if [ $ngx_found = no ]; then
++
++    # Linux before glibc 2.17, notably CentOS 6
++
++    ngx_feature="clock_gettime(CLOCK_MONOTONIC) in librt"
++    ngx_feature_libs="-lrt"
++    . auto/feature
++
++    if [ $ngx_found = yes ]; then
++        CORE_LIBS="$CORE_LIBS -lrt"
++    fi
++fi
++
++
+ ngx_feature="posix_fadvise()"
+ ngx_feature_name="NGX_HAVE_POSIX_FADVISE"
+ ngx_feature_run=no
+Index: nginx-1.10.3/src/core/ngx_times.c
+===================================================================
+--- nginx-1.10.3.orig/src/core/ngx_times.c
++++ nginx-1.10.3/src/core/ngx_times.c
+@@ -9,6 +9,9 @@
+ #include <ngx_core.h>
+ 
+ 
++static ngx_msec_t ngx_monotonic_time(time_t sec, ngx_uint_t msec);
++
++
+ /*
+  * The time may be updated by signal handler or by several threads.
+  * The time update operations are rare and require to hold the ngx_time_lock.
+@@ -93,7 +96,7 @@ ngx_time_update(void)
+     sec = tv.tv_sec;
+     msec = tv.tv_usec / 1000;
+ 
+-    ngx_current_msec = (ngx_msec_t) sec * 1000 + msec;
++    ngx_current_msec = ngx_monotonic_time(sec, msec);
+ 
+     tp = &cached_time[slot];
+ 
+@@ -189,6 +192,31 @@ ngx_time_update(void)
+ }
+ 
+ 
++static ngx_msec_t
++ngx_monotonic_time(time_t sec, ngx_uint_t msec)
++{
++#if (NGX_HAVE_CLOCK_MONOTONIC)
++    struct timespec  ts;
++
++#if defined(CLOCK_MONOTONIC_FAST)
++    clock_gettime(CLOCK_MONOTONIC_FAST, &ts);
++
++#elif defined(CLOCK_MONOTONIC_COARSE)
++    clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
++
++#else
++    clock_gettime(CLOCK_MONOTONIC, &ts);
++#endif
++
++    sec = ts.tv_sec;
++    msec = ts.tv_nsec / 1000000;
++
++#endif
++
++    return (ngx_msec_t) sec * 1000 + msec;
++}
++
++
+ #if !(NGX_WIN32)
+ 
+ void
